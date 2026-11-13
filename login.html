@@ -87,6 +87,18 @@ const SUPABASE_KEY = "sb_publishable_C5yy5qd1lfZ_7lk9wveLag_8r-6Ju1B";
 const MAP_PAGE = "index.html";
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+function deviceId() {
+  const k = "dlm_device_id";
+  let id = null;
+  try { id = localStorage.getItem(k); } catch (e) {}
+  if (!id || id.length < 20) {
+    const a = new Uint8Array(16); crypto.getRandomValues(a);
+    id = "d-" + Array.from(a, b => b.toString(16).padStart(2, "0")).join("");
+    try { localStorage.setItem(k, id); } catch (e) {}
+  }
+  return id;
+}
+
 const $ = (id) => document.getElementById(id);
 let mode = "in";
 
@@ -152,6 +164,18 @@ $("authForm").onsubmit = async (e) => {
 async function showStatus() {
   const { data: { user } } = await sb.auth.getUser();
   if (!user) { show("auth"); return; }
+  const { data: dev } = await sb.rpc("register_device", { p_device: deviceId() });
+  if (dev === "other_device" || dev === "device_taken") {
+    $("openMap").classList.add("hidden");
+    $("refreshBtn").classList.add("hidden");
+    $("stIcon").textContent = "🔒";
+    $("stTitle").textContent = dev === "other_device" ? "This account is locked to another device" : "This device belongs to another account";
+    $("stText").textContent = dev === "other_device"
+      ? "Each account works on one device and one browser only. If you changed your device, ask the admin to reset it."
+      : "Only one account can be used on each device. Sign in with the account that was first used on this device, or contact the admin.";
+    show("status");
+    return;
+  }
   const { data: profile } = await sb.from("profiles").select("status, full_name").eq("id", user.id).maybeSingle();
   const status = profile ? profile.status : "pending";
   const name = (profile && profile.full_name) || user.email;

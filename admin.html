@@ -30,6 +30,7 @@
   .act button:disabled { opacity: .5; cursor: wait; }
   .empty, .msg { padding: 30px; text-align: center; color: #5A6570; background: #fff; border-radius: 12px; }
   .you { color: #5A6570; font-size: 12px; }
+  .reset { margin-top: 4px; border: 1px solid #D5DAD3; background: #fff; padding: 4px 10px; border-radius: 8px; font: inherit; font-size: 12px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -46,6 +47,7 @@
     <button data-f="approved">متوافق عليهم</button>
     <button data-f="rejected">مرفوضين</button>
     <button data-f="all">الكل</button>
+    <button data-f="log">سجل الدخول</button>
   </div>
   <div id="list" class="msg">⏳ جاري التحميل…</div>
 </main>
@@ -55,24 +57,37 @@
 // Only the publishable key. The database itself checks that the caller is an admin.
 const sb = supabase.createClient("https://rkajrodqygvnearncdut.supabase.co", "sb_publishable_C5yy5qd1lfZ_7lk9wveLag_8r-6Ju1B");
 const NAMES = { pending: "مستني", approved: "متوافق عليه", rejected: "مرفوض" };
-let rows = [], filter = "pending", myId = null;
+let rows = [], devices = {}, logs = [], filter = "pending", myId = null;
+const RES = { ok: "✅ دخل", ok_new_device: "✅ أول دخول (اتربط بالجهاز)", ok_admin: "✅ أدمن", other_device: "🔒 حاول من جهاز تاني", device_taken: "🔒 جهاز بتاع حساب تاني", bad_device: "⚠️ جهاز غير معروف" };
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const date = (d) => d ? new Date(d).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—";
 
+function renderLog() {
+  const box = document.getElementById("list");
+  if (!logs.length) { box.className = "empty"; box.textContent = "مفيش دخول متسجل لسه."; return; }
+  const who = (id) => { const r = rows.find((x) => x.id === id); return r ? (r.full_name || r.email) : "—"; };
+  box.className = "";
+  box.innerHTML = `<table><thead><tr><th>الوقت</th><th>الاسم</th><th>النتيجة</th><th>IP</th><th>الجهاز / المتصفح</th></tr></thead><tbody>` +
+    logs.map((l) => `<tr><td>${date(l.created_at)}</td><td><b>${esc(who(l.user_id))}</b></td><td>${RES[l.result] || esc(l.result)}</td><td class="ltr">${esc(l.ip) || "—"}</td><td class="ltr" style="font-size:12px;color:#5A6570;max-width:320px">${esc((l.user_agent || "").slice(0, 120))}</td></tr>`).join("") +
+    `</tbody></table>`;
+}
+
 function render() {
   document.getElementById("nPending").textContent = rows.filter((r) => r.status === "pending").length;
+  if (filter === "log") { renderLog(); return; }
   const list = filter === "all" ? rows : rows.filter((r) => r.status === filter);
   const box = document.getElementById("list");
   if (!list.length) { box.className = "empty"; box.textContent = "مفيش حسابات هنا."; return; }
   box.className = "";
-  box.innerHTML = `<table><thead><tr><th>الاسم</th><th>الشركة</th><th>التليفون</th><th>الإيميل</th><th>اتسجل</th><th>الحالة</th><th></th></tr></thead><tbody>` +
+  box.innerHTML = `<table><thead><tr><th>الاسم</th><th>الشركة</th><th>التليفون</th><th>الإيميل</th><th>اتسجل</th><th>الجهاز</th><th>الحالة</th><th></th></tr></thead><tbody>` +
     list.map((r) => `<tr>
       <td><b>${esc(r.full_name) || "—"}</b>${r.is_admin ? ' <span class="you">(أدمن)</span>' : ""}</td>
       <td>${esc(r.company) || "—"}</td>
       <td class="ltr">${esc(r.phone) || "—"}</td>
       <td class="ltr">${esc(r.email)}</td>
       <td>${date(r.created_at)}</td>
+      <td>${r.is_admin ? '<span class="you">أي جهاز</span>' : devices[r.id] ? `<span class="you">مربوط · آخر دخول ${date(devices[r.id].last_seen)}</span><br><button class="reset" data-reset="${r.id}">🔓 فك الجهاز</button>` : '<span class="you">لسه ما دخلش</span>'}</td>
       <td><span class="pill ${esc(r.status)}">${NAMES[r.status] || esc(r.status)}</span></td>
       <td>${r.id === myId ? '<span class="you">ده انت</span>' : `<div class="act">
         ${r.status !== "approved" ? `<button class="yes" data-id="${r.id}" data-s="approved">✅ قبول</button>` : ""}
@@ -87,6 +102,12 @@ async function load() {
     .order("created_at", { ascending: false });
   if (error) { const b = document.getElementById("list"); b.className = "msg"; b.textContent = "حصلت مشكلة: " + error.message; return; }
   rows = data;
+  const [{ data: dv }, { data: lg }] = await Promise.all([
+    sb.from("user_devices").select("user_id, last_seen, user_agent"),
+    sb.from("login_log").select("user_id, ip, user_agent, result, created_at").order("created_at", { ascending: false }).limit(200)
+  ]);
+  devices = Object.fromEntries((dv || []).map((d) => [d.user_id, d]));
+  logs = lg || [];
   render();
 }
 
@@ -99,6 +120,16 @@ document.querySelector(".tabs").onclick = (e) => {
 };
 
 document.getElementById("list").onclick = async (e) => {
+  const rb = e.target.closest("button[data-reset]");
+  if (rb) {
+    const ru = rows.find((x) => x.id === rb.dataset.reset);
+    if (!confirm(`فك ربط الجهاز لـ ${ru.full_name || ru.email}؟ أول جهاز هيدخل منه بعد كده هيتربط بيه.`)) return;
+    rb.disabled = true;
+    const { error } = await sb.rpc("reset_device", { target: rb.dataset.reset });
+    if (error) { alert("حصلت مشكلة: " + error.message); rb.disabled = false; return; }
+    await load();
+    return;
+  }
   const b = e.target.closest("button[data-s]");
   if (!b) return;
   const r = rows.find((x) => x.id === b.dataset.id);

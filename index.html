@@ -105,11 +105,25 @@ td:last-child{text-align:left;font-weight:700}
 <script>
 // Only the publishable key. The data files live in a private bucket that only approved users can read.
 const sb = supabase.createClient("https://rkajrodqygvnearncdut.supabase.co", "sb_publishable_C5yy5qd1lfZ_7lk9wveLag_8r-6Ju1B");
+function deviceId() {
+  const k = "dlm_device_id";
+  let id = null;
+  try { id = localStorage.getItem(k); } catch (e) {}
+  if (!id || id.length < 20) {
+    const a = new Uint8Array(16); crypto.getRandomValues(a);
+    id = "d-" + Array.from(a, b => b.toString(16).padStart(2, "0")).join("");
+    try { localStorage.setItem(k, id); } catch (e) {}
+  }
+  return id;
+}
+
 (async () => {
   const L = document.getElementById('loading');
   try {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { location.replace('login.html'); return; }
+    const { data: dev } = await sb.rpc('register_device', { p_device: deviceId() });
+    if (dev === 'other_device' || dev === 'device_taken') { location.replace('login.html'); return; }
     const { data: ok } = await sb.rpc('is_approved');
     if (!ok) { location.replace('login.html'); return; }
     const { data: admin } = await sb.rpc('is_admin');
