@@ -173,3 +173,54 @@ show=function(f,fly){_show(f,fly);useF='all';stF='all';sortF='area';pageF=0;qF='
  O.addEventListener('change',e=>{const k=e.target.dataset.k;if(k==='u')useF=e.target.value;if(k==='s')stF=e.target.value;if(k==='o')sortF=e.target.value;pageF=0;re();});
  O.addEventListener('input',e=>{if(e.target.dataset.k==='q'){qF=e.target.value.trim().toLowerCase();pageF=0;const pos=e.target.selectionStart;re();const q=O.querySelector('[data-k=q]');q.focus();q.setSelectionRange(pos,pos);}});
  O.addEventListener('click',e=>{const pg=e.target.closest('[data-pg]');if(pg){pageF+=+pg.dataset.pg;re();return;}const o=e.target.closest('.opp');if(o)plotCard(+o.dataset.i);});};
+
+// ---------- Favorites and PDF ----------
+let FAV = new Set();
+const favLoad = async () => {
+  try { const { data } = await sb.from('favorites').select('parcel_id'); FAV = new Set((data || []).map(r => Number(r.parcel_id))); } catch (e) {}
+  const c = document.getElementById('favCount'); if (c) c.textContent = FAV.size;
+};
+favLoad();
+const _plotCard = plotCard;
+plotCard = function (i) {
+  _plotCard(i);
+  const D = document.getElementById('detail');
+  const id = Number(PL.id[i]);
+  D.insertAdjacentHTML('afterbegin', `<div style="display:flex;gap:8px;margin-bottom:10px">
+    <button id="favBtn" style="flex:1;min-height:40px;border:1px solid #D5DAD3;background:#fff;border-radius:10px;font:inherit;font-size:13px;cursor:pointer"></button>
+    <button id="pdfBtn" style="flex:1;min-height:40px;border:1px solid #D5DAD3;background:#fff;border-radius:10px;font:inherit;font-size:13px;cursor:pointer">🖨️ PDF / طباعة</button></div>`);
+  const fb = document.getElementById('favBtn');
+  const paint = () => { fb.textContent = FAV.has(id) ? '★ في المفضلة (شيلها)' : '☆ ضيف للمفضلة'; fb.style.color = FAV.has(id) ? '#B7791F' : ''; };
+  paint();
+  fb.onclick = async () => {
+    fb.disabled = true;
+    const r = FAV.has(id) ? await sb.from('favorites').delete().eq('parcel_id', id) : await sb.from('favorites').insert({ parcel_id: id });
+    if (r.error) alert('حصلت مشكلة: ' + r.error.message); else { FAV.has(id) ? FAV.delete(id) : FAV.add(id); }
+    fb.disabled = false; paint();
+    const c = document.getElementById('favCount'); if (c) c.textContent = FAV.size;
+  };
+  document.getElementById('pdfBtn').onclick = () => {
+    const clone = D.cloneNode(true);
+    clone.querySelectorAll('button, #opps').forEach(el => el.remove());
+    const w = window.open('', '_blank');
+    if (!w) { alert('المتصفح منع النافذة. اسمح بالـ pop-ups للموقع ده.'); return; }
+    w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>أرض ${id}</title><style>
+      body{font-family:system-ui,"Segoe UI",Tahoma,sans-serif;color:#1c2533;margin:28px;font-size:13px}
+      h2{margin:4px 0} table{width:100%;border-collapse:collapse} td{padding:6px 4px;border-bottom:1px solid #EEF0EC;vertical-align:top}
+      td:first-child{color:#5A6570;width:45%} .lbl{font-weight:700;margin-top:14px} .note{color:#5A6570;font-size:11px} a{color:#0F6E73}
+      .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-left:4px}
+      .foot{margin-top:24px;color:#5A6570;font-size:11px;border-top:1px solid #EEF0EC;padding-top:8px}
+    </style></head><body>${clone.innerHTML}<div class="foot">Dubai Land Map · ${new Date().toLocaleDateString('en-GB')} · بيانات حكومية مفتوحة، للاسترشاد فقط</div></body></html>`);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 400);
+  };
+};
+window.showFavorites = function () {
+  const D = document.getElementById('detail');
+  const list = [...FAV].map(id => byId.get(id)).filter(i => i != null);
+  D.innerHTML = `<div class="lbl">المفضلة</div><h2 style="font-size:22px">⭐ الأراضي اللي حفظتها (${list.length})</h2>` +
+    (list.length ? list.map(i => `<button class="opp" data-i="${i}" style="display:flex;width:100%;justify-content:space-between;align-items:center;gap:8px;text-align:right;background:none;border:0;border-bottom:1px solid var(--line);padding:9px 2px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink)"><span><b>${PL.id[i]}</b> · ${useName(PL.u_d[PL.u[i]])}<br><span style="color:#5A6570">${esc((featByNum.get(PL.c[i]) || {properties:{}}).properties.ar || '')} · ${fmt(PL.a[i])} قدم²</span></span><span style="color:#B7791F">★</span></button>`).join('')
+      : '<div class="empty">لسه ما حفظتش أراضي. افتح أي أرض واضغط "☆ ضيف للمفضلة".</div>');
+  D.onclick = e => { const o = e.target.closest('.opp[data-i]'); if (o && D.contains(o) && /المفضلة/.test(D.textContent.slice(0, 20))) plotCard(+o.dataset.i); };
+  document.getElementById('side').scrollTo({ top: D.offsetTop - 10, behavior: 'smooth' });
+};
