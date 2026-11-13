@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dubai Land Map - Admin</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif; background: #F4F5F2; color: #1c2533; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 24px; background: #0F6E73; color: #fff; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 20px; }
+  header a, header button { color: #fff; background: rgba(255,255,255,.15); border: 0; padding: 8px 14px; border-radius: 8px; text-decoration: none; font: inherit; font-size: 14px; cursor: pointer; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tabs button { border: 1px solid #D5DAD3; background: #fff; padding: 9px 16px; border-radius: 999px; font: inherit; font-size: 14px; cursor: pointer; }
+  .tabs button.on { background: #1c2533; color: #fff; border-color: #1c2533; }
+  .count { display: inline-block; min-width: 22px; padding: 0 6px; margin-inline-start: 6px; border-radius: 999px; background: #E9C77B; color: #1c2533; font-size: 12px; font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  th, td { padding: 12px 14px; text-align: right; border-bottom: 1px solid #EEF0EC; font-size: 14px; vertical-align: middle; }
+  th { background: #FAFBF9; color: #5A6570; font-weight: 600; font-size: 13px; }
+  td.ltr { direction: ltr; text-align: right; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .pending { background: #FFF4DB; color: #8A5A00; }
+  .approved { background: #E3F4EA; color: #1E6B45; }
+  .rejected { background: #FDECEC; color: #A12626; }
+  .act { display: flex; gap: 6px; }
+  .act button { border: 0; padding: 7px 12px; border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer; }
+  .yes { background: #1E6B45; color: #fff; }
+  .no { background: #fff; color: #A12626; border: 1px solid #F0C4C4 !important; }
+  .act button:disabled { opacity: .5; cursor: wait; }
+  .empty, .msg { padding: 30px; text-align: center; color: #5A6570; background: #fff; border-radius: 12px; }
+  .you { color: #5A6570; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>لوحة الأدمن · الحسابات</h1>
+  <div style="display:flex;gap:8px">
+    <a href="index.html">الخريطة</a>
+    <button id="signOut" type="button">تسجيل خروج</button>
+  </div>
+</header>
+<main>
+  <div class="tabs">
+    <button data-f="pending" class="on">مستنيين موافقة<span id="nPending" class="count">0</span></button>
+    <button data-f="approved">متوافق عليهم</button>
+    <button data-f="rejected">مرفوضين</button>
+    <button data-f="all">الكل</button>
+  </div>
+  <div id="list" class="msg">⏳ جاري التحميل…</div>
+</main>
+
+<script src="supabase.js"></script>
+<script>
+// Only the publishable key. The database itself checks that the caller is an admin.
+const sb = supabase.createClient("https://rkajrodqygvnearncdut.supabase.co", "sb_publishable_C5yy5qd1lfZ_7lk9wveLag_8r-6Ju1B");
+const NAMES = { pending: "مستني", approved: "متوافق عليه", rejected: "مرفوض" };
+let rows = [], filter = "pending", myId = null;
+
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const date = (d) => d ? new Date(d).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—";
+
+function render() {
+  document.getElementById("nPending").textContent = rows.filter((r) => r.status === "pending").length;
+  const list = filter === "all" ? rows : rows.filter((r) => r.status === filter);
+  const box = document.getElementById("list");
+  if (!list.length) { box.className = "empty"; box.textContent = "مفيش حسابات هنا."; return; }
+  box.className = "";
+  box.innerHTML = `<table><thead><tr><th>الاسم</th><th>الشركة</th><th>التليفون</th><th>الإيميل</th><th>اتسجل</th><th>الحالة</th><th></th></tr></thead><tbody>` +
+    list.map((r) => `<tr>
+      <td><b>${esc(r.full_name) || "—"}</b>${r.is_admin ? ' <span class="you">(أدمن)</span>' : ""}</td>
+      <td>${esc(r.company) || "—"}</td>
+      <td class="ltr">${esc(r.phone) || "—"}</td>
+      <td class="ltr">${esc(r.email)}</td>
+      <td>${date(r.created_at)}</td>
+      <td><span class="pill ${esc(r.status)}">${NAMES[r.status] || esc(r.status)}</span></td>
+      <td>${r.id === myId ? '<span class="you">ده انت</span>' : `<div class="act">
+        ${r.status !== "approved" ? `<button class="yes" data-id="${r.id}" data-s="approved">✅ قبول</button>` : ""}
+        ${r.status !== "rejected" ? `<button class="no" data-id="${r.id}" data-s="rejected">⛔ رفض</button>` : ""}
+      </div>`}</td>
+    </tr>`).join("") + `</tbody></table>`;
+}
+
+async function load() {
+  const { data, error } = await sb.from("profiles")
+    .select("id, email, full_name, company, phone, status, is_admin, created_at, decided_at")
+    .order("created_at", { ascending: false });
+  if (error) { const b = document.getElementById("list"); b.className = "msg"; b.textContent = "حصلت مشكلة: " + error.message; return; }
+  rows = data;
+  render();
+}
+
+document.querySelector(".tabs").onclick = (e) => {
+  const b = e.target.closest("button[data-f]");
+  if (!b) return;
+  filter = b.dataset.f;
+  document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("on", x === b));
+  render();
+};
+
+document.getElementById("list").onclick = async (e) => {
+  const b = e.target.closest("button[data-s]");
+  if (!b) return;
+  const r = rows.find((x) => x.id === b.dataset.id);
+  const word = b.dataset.s === "approved" ? "تقبل" : "ترفض";
+  if (!confirm(`متأكد إنك عاوز ${word} ${r.full_name || r.email}؟`)) return;
+  b.disabled = true;
+  const { error } = await sb.rpc("set_user_status", { target: b.dataset.id, new_status: b.dataset.s });
+  if (error) { alert("حصلت مشكلة: " + error.message); b.disabled = false; return; }
+  await load();
+};
+
+document.getElementById("signOut").onclick = async () => { await sb.auth.signOut(); location.replace("login.html"); };
+
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { location.replace("login.html"); return; }
+  myId = session.user.id;
+  const { data: admin } = await sb.rpc("is_admin");
+  if (!admin) { location.replace("index.html"); return; }
+  load();
+})();
+</script>
+</body>
+</html>
