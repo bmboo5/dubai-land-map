@@ -22,9 +22,10 @@ const DSTOPS=[0,'#F3F4F1',1,'#FBD3D0',10,'#F08A80',40,'#D2433A',120,'#8E1B14'];
 const HSTOPS=[0,'#EDEBF5',20,'#CFC8E8',60,'#A090D2',150,'#6E54B5',350,'#3E2A86'];
 const ESRI='https://server.arcgisonline.com/ArcGIS/rest/services/';
 const _pmp=new pmtiles.Protocol();maplibregl.addProtocol('pmtiles',_pmp.tile);
-const BLD_URL='pmtiles://'+new URL('buildings.pmtiles',location.href).href;
+const BLD=f=>'pmtiles://'+new URL(f,location.href).href;
 const style={version:8,sources:{c:{type:'geojson',data:DATA},
- bld:{type:'vector',url:BLD_URL,attribution:'Buildings © Microsoft (ODbL)'},
+ bldA:{type:'vector',url:BLD('buildings_a.pmtiles'),attribution:'Buildings © Microsoft (ODbL)'},
+ bldB:{type:'vector',url:BLD('buildings_b.pmtiles')},
  street:{type:'raster',tiles:[ESRI+'World_Street_Map/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19,attribution:'Basemap © Esri, HERE, Garmin, OpenStreetMap contributors'},
  sat:{type:'raster',tiles:[ESRI+'World_Imagery/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19,attribution:'Imagery © Esri, Maxar, Earthstar Geographics'},
  labels:{type:'raster',tiles:[ESRI+'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19}},
@@ -35,8 +36,10 @@ const style={version:8,sources:{c:{type:'geojson',data:DATA},
  {id:'fill',type:'fill',source:'c',paint:{'fill-color':['get','useColor'],'fill-opacity':0.28}},
  {id:'ext',type:'fill-extrusion',source:'c',layout:{visibility:'none'},paint:{'fill-extrusion-color':['interpolate',['linear'],['get','max_h'],...HSTOPS],'fill-extrusion-height':['get','ext'],'fill-extrusion-opacity':0.92}},
  {id:'line',type:'line',source:'c',paint:{'line-color':['get','useColor'],'line-width':1.4,'line-opacity':0.95}},
- {id:'bld-fill',type:'fill',source:'bld','source-layer':'buildings',minzoom:14,paint:{'fill-color':'#8A93A3','fill-opacity':['interpolate',['linear'],['zoom'],14,0.35,17,0.6]}},
- {id:'bld-line',type:'line',source:'bld','source-layer':'buildings',minzoom:15,paint:{'line-color':'#4B5563','line-width':0.6,'line-opacity':0.7}},
+ {id:'bld-fill-A',type:'fill',source:'bldA','source-layer':'buildings',minzoom:14,paint:{'fill-color':'#8A93A3','fill-opacity':['interpolate',['linear'],['zoom'],14,0.35,17,0.6]}},
+ {id:'bld-line-A',type:'line',source:'bldA','source-layer':'buildings',minzoom:15,paint:{'line-color':'#4B5563','line-width':0.6,'line-opacity':0.7}},
+ {id:'bld-fill-B',type:'fill',source:'bldB','source-layer':'buildings',minzoom:14,paint:{'fill-color':'#8A93A3','fill-opacity':['interpolate',['linear'],['zoom'],14,0.35,17,0.6]}},
+ {id:'bld-line-B',type:'line',source:'bldB','source-layer':'buildings',minzoom:15,paint:{'line-color':'#4B5563','line-width':0.6,'line-opacity':0.7}},
  {id:'sel',type:'line',source:'c',filter:['==',['id'],-1],paint:{'line-color':'#0F6E73','line-width':3}},
  {id:'labels',type:'raster',source:'labels',layout:{visibility:'none'}}
 ]};
