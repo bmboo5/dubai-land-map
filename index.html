@@ -146,6 +146,7 @@ function deviceId() {
     const files = await Promise.all(['communities.json.gz', 'plots.part00', 'plots.part01', 'plots.part02'].map(dl));
     window.__DATA = await readJson(files[0]);
     window.__PL = await readJson(new Blob(files.slice(1)));
+    try { window.__AD = JSON.parse(await (await dl('ad_districts.json')).text()); } catch (e) { window.__AD = []; }
     const s = document.createElement('script');
     s.src = 'app.js';
     s.onload = () => L.remove();

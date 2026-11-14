@@ -246,3 +246,45 @@ window.showFavorites = function () {
 (()=>{const h=document.createElement('div');h.id='bldHint';h.textContent='🔍 قرّب على الخريطة عشان تشوف شكل كل مبنى';
 h.style.cssText='position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:7;background:rgba(255,255,255,.95);border:1px solid #D5DAD3;border-radius:999px;padding:7px 14px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.08);pointer-events:none';
 document.body.appendChild(h);const upd=()=>{h.style.display=map.getZoom()<14?'block':'none';};map.on('zoomend',upd);upd();})();
+
+// ---------- Abu Dhabi: official ADREC sales by district ----------
+(() => {
+  const AD = window.__AD;
+  if (!AD || !AD.length) return;
+  const fc = { type: 'FeatureCollection', features: AD.map((r, i) => ({ type: 'Feature', id: i,
+    geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
+    properties: { n: r.n12 || 0, psf: r.psf && r.psf >= 100 ? Math.round(r.psf) : 0, name: r.name } })) };
+  const add = () => {
+    if (map.getSource('ad')) return;
+    map.addSource('ad', { type: 'geojson', data: fc, attribution: 'Abu Dhabi sales © ADREC' });
+    map.addLayer({ id: 'ad-c', type: 'circle', source: 'ad', paint: {
+      'circle-radius': ['interpolate', ['linear'], ['sqrt', ['get', 'n']], 0, 5, 30, 14, 90, 30],
+      'circle-color': ['case', ['==', ['get', 'psf'], 0], '#9CA3AF',
+        ['interpolate', ['linear'], ['get', 'psf'], 600, '#2E7D6B', 1300, '#E9C46A', 2200, '#E76F51', 3500, '#9B2226']],
+      'circle-opacity': 0.8, 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.5 } });
+    map.addLayer({ id: 'ad-l', type: 'symbol', source: 'ad', minzoom: 9.5,
+      layout: { 'text-field': ['get', 'name'], 'text-size': 11, 'text-offset': [0, 1.6], 'text-anchor': 'top' },
+      paint: { 'text-color': '#1c2533', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
+    map.on('click', 'ad-c', e => adCard(AD[e.features[0].id]));
+    map.on('mouseenter', 'ad-c', () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', 'ad-c', () => map.getCanvas().style.cursor = '');
+  };
+  map.loaded() ? add() : map.on('load', add);
+  function adCard(r) {
+    const D = document.getElementById('detail');
+    const row = (k, v) => `<tr><td style="color:#5A6570;padding:6px 4px">${k}</td><td style="padding:6px 4px"><b>${v}</b></td></tr>`;
+    D.innerHTML = `<div class="lbl">أبوظبي · بيانات رسمية من ADREC</div><h2 style="font-size:22px;margin:4px 0 10px">${esc(r.name)}</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+      ${row('صفقات آخر 12 شهر', fmt(r.n12))}
+      ${row('قيمة الصفقات (آخر 12 شهر)', r.value12 ? fmt(Math.round(r.value12 / 1e6)) + ' مليون درهم' : '—')}
+      ${row('متوسط سعر القدم (وحدات)', r.psf && r.psf >= 100 ? fmt(Math.round(r.psf)) + ' درهم' : '—')}
+      ${row('متوسط سعر القدم (أراضي)', r.plot_psf && r.plot_psf >= 20 ? fmt(Math.round(r.plot_psf)) + ' درهم' : '—')}
+      ${row('متوسط سعر الصفقة', r.price ? fmt(Math.round(r.price)) + ' درهم' : '—')}
+      ${row('نسبة البيع على الخريطة', r.offplan != null ? Math.round(r.offplan * 100) + '%' : '—')}
+      ${row('أكتر مشروع اتباع فيه', esc(r.top || '—'))}
+      ${row('كل الصفقات من 2019', fmt(r.n_all))}
+      </table>
+      <div class="note" style="margin-top:10px;font-size:11px;color:#5A6570">المصدر: مركز أبوظبي العقاري (ADREC) — بيانات المبيعات المسجلة. "المتوسط" = الوسيط. الموقع على الخريطة تقريبي لمركز الحي.</div>`;
+    document.getElementById('side').scrollTo({ top: D.offsetTop - 10, behavior: 'smooth' });
+  }
+})();
