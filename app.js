@@ -205,6 +205,7 @@ plotCard = function (i) {
   const id = Number(PL.id[i]);
   D.insertAdjacentHTML('afterbegin', `<div style="display:flex;gap:8px;margin-bottom:10px">
     <button id="favBtn" style="flex:1;min-height:40px;border:1px solid #D5DAD3;background:#fff;border-radius:10px;font:inherit;font-size:13px;cursor:pointer"></button>
+    <button id="ownBtn" style="flex:1;min-height:40px;border:0;background:#0F6E73;color:#fff;border-radius:10px;font:inherit;font-size:13px;cursor:pointer">📞 اطلب تواصل مع المالك</button>
     <button id="pdfBtn" style="flex:1;min-height:40px;border:1px solid #D5DAD3;background:#fff;border-radius:10px;font:inherit;font-size:13px;cursor:pointer">🖨️ PDF / طباعة</button></div>`);
   const fb = document.getElementById('favBtn');
   const paint = () => { fb.textContent = FAV.has(id) ? '★ في المفضلة (شيلها)' : '☆ ضيف للمفضلة'; fb.style.color = FAV.has(id) ? '#B7791F' : ''; };
@@ -216,9 +217,28 @@ plotCard = function (i) {
     fb.disabled = false; paint();
     const c = document.getElementById('favCount'); if (c) c.textContent = FAV.size;
   };
+  document.getElementById('ownBtn').onclick = () => {
+    if (document.getElementById('ownForm')) return;
+    D.insertAdjacentHTML('afterbegin', `<div id="ownForm" style="border:1px solid #D5DAD3;border-radius:12px;padding:12px;margin-bottom:12px;background:#F7F8F6">
+      <b>طلب تواصل بخصوص أرض ${id}</b>
+      <div style="font-size:12px;color:#5A6570;margin:4px 0 8px">هنتواصل مع المالك بالطرق الرسمية ونرجعلك.</div>
+      <select id="ownType" style="width:100%;padding:8px;border-radius:8px;border:1px solid #D5DAD3;font:inherit;margin-bottom:6px">
+        <option value="buy">عاوز أشتري</option><option value="rent">عاوز أأجّر</option><option value="info">عاوز معلومات</option><option value="other">حاجة تانية</option></select>
+      <textarea id="ownMsg" maxlength="1000" rows="3" placeholder="رسالة (اختياري)" style="width:100%;padding:8px;border-radius:8px;border:1px solid #D5DAD3;font:inherit;box-sizing:border-box"></textarea>
+      <div style="display:flex;gap:6px;margin-top:6px"><button id="ownSend" style="flex:1;padding:9px;border:0;border-radius:8px;background:#0F6E73;color:#fff;font:inherit;cursor:pointer">إرسال الطلب</button>
+      <button id="ownCancel" style="padding:9px 14px;border:1px solid #D5DAD3;border-radius:8px;background:#fff;font:inherit;cursor:pointer">إلغاء</button></div></div>`);
+    document.getElementById('ownCancel').onclick = () => document.getElementById('ownForm').remove();
+    document.getElementById('ownSend').onclick = async (ev) => {
+      ev.target.disabled = true;
+      const { error } = await sb.from('owner_requests').insert({ parcel_id: id, request_type: document.getElementById('ownType').value, message: document.getElementById('ownMsg').value.trim() || null });
+      const f = document.getElementById('ownForm');
+      if (error) { alert(/limit/.test(error.message) ? 'وصلت للحد اليومي للطلبات (20). جرّب بكرة.' : 'حصلت مشكلة: ' + error.message); ev.target.disabled = false; return; }
+      f.innerHTML = '✅ طلبك وصل. هنتواصل معاك قريب.';
+    };
+  };
   document.getElementById('pdfBtn').onclick = () => {
     const clone = D.cloneNode(true);
-    clone.querySelectorAll('button, #opps').forEach(el => el.remove());
+    clone.querySelectorAll('button, #opps, #ownForm').forEach(el => el.remove());
     const w = window.open('', '_blank');
     if (!w) { alert('المتصفح منع النافذة. اسمح بالـ pop-ups للموقع ده.'); return; }
     w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>أرض ${id}</title><style>

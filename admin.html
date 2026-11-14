@@ -48,6 +48,7 @@
     <button data-f="rejected">مرفوضين</button>
     <button data-f="all">الكل</button>
     <button data-f="log">سجل الدخول</button>
+    <button data-f="req">طلبات التواصل<span id="nReq" class="count">0</span></button>
   </div>
   <div id="list" class="msg">⏳ جاري التحميل…</div>
 </main>
@@ -57,7 +58,7 @@
 // Only the publishable key. The database itself checks that the caller is an admin.
 const sb = supabase.createClient("https://rkajrodqygvnearncdut.supabase.co", "sb_publishable_C5yy5qd1lfZ_7lk9wveLag_8r-6Ju1B");
 const NAMES = { pending: "مستني", approved: "متوافق عليه", rejected: "مرفوض" };
-let rows = [], devices = {}, logs = [], filter = "pending", myId = null;
+let rows = [], devices = {}, logs = [], reqs = [], filter = "pending", myId = null;
 const RES = { ok: "✅ دخل", ok_new_device: "✅ أول دخول (اتربط بالجهاز)", ok_admin: "✅ أدمن", other_device: "🔒 حاول من جهاز تاني", device_taken: "🔒 جهاز بتاع حساب تاني", bad_device: "⚠️ جهاز غير معروف" };
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -73,9 +74,25 @@ function renderLog() {
     `</tbody></table>`;
 }
 
+const REQT = { buy: "شراء", rent: "إيجار", info: "معلومات", other: "أخرى" };
+const REQS = { new: "جديد", in_progress: "جاري", done: "تم", rejected: "مرفوض" };
+function renderReq() {
+  const box = document.getElementById("list");
+  if (!reqs.length) { box.className = "empty"; box.textContent = "مفيش طلبات لسه."; return; }
+  const who = (id) => rows.find((x) => x.id === id) || {};
+  box.className = "";
+  box.innerHTML = `<table><thead><tr><th>الوقت</th><th>العميل</th><th>التليفون</th><th>رقم الأرض</th><th>النوع</th><th>الرسالة</th><th>الحالة</th></tr></thead><tbody>` +
+    reqs.map((q) => { const u = who(q.user_id); return `<tr><td>${date(q.created_at)}</td><td><b>${esc(u.full_name || u.email || "—")}</b><br><span class="you">${esc(u.company || "")}</span></td>
+      <td class="ltr">${esc(u.phone || "—")}</td><td class="ltr"><b>${q.parcel_id}</b></td><td>${REQT[q.request_type] || esc(q.request_type)}</td>
+      <td style="max-width:260px">${esc(q.message || "")}</td>
+      <td><select data-req="${q.id}" style="padding:5px;border-radius:6px;font:inherit">${Object.entries(REQS).map(([k, v]) => `<option value="${k}" ${k === q.status ? "selected" : ""}>${v}</option>`).join("")}</select></td></tr>`; }).join("") + `</tbody></table>`;
+}
+
 function render() {
   document.getElementById("nPending").textContent = rows.filter((r) => r.status === "pending").length;
+  document.getElementById("nReq").textContent = reqs.filter((q) => q.status === "new").length;
   if (filter === "log") { renderLog(); return; }
+  if (filter === "req") { renderReq(); return; }
   const list = filter === "all" ? rows : rows.filter((r) => r.status === filter);
   const box = document.getElementById("list");
   if (!list.length) { box.className = "empty"; box.textContent = "مفيش حسابات هنا."; return; }
@@ -106,6 +123,8 @@ async function load() {
     sb.from("user_devices").select("user_id, last_seen, user_agent"),
     sb.from("login_log").select("user_id, ip, user_agent, result, created_at").order("created_at", { ascending: false }).limit(200)
   ]);
+  const { data: rq } = await sb.from("owner_requests").select("id, user_id, parcel_id, request_type, message, status, created_at").order("created_at", { ascending: false }).limit(300);
+  reqs = rq || [];
   devices = Object.fromEntries((dv || []).map((d) => [d.user_id, d]));
   logs = lg || [];
   render();
@@ -140,6 +159,13 @@ document.getElementById("list").onclick = async (e) => {
   if (error) { alert("حصلت مشكلة: " + error.message); b.disabled = false; return; }
   await load();
 };
+
+document.getElementById("list").addEventListener("change", async (e) => {
+  const sel = e.target.closest("select[data-req]");
+  if (!sel) return;
+  const { error } = await sb.from("owner_requests").update({ status: sel.value }).eq("id", sel.dataset.req);
+  if (error) alert("حصلت مشكلة: " + error.message); else { const q = reqs.find((x) => String(x.id) === sel.dataset.req); if (q) q.status = sel.value; document.getElementById("nReq").textContent = reqs.filter((x) => x.status === "new").length; }
+});
 
 document.getElementById("signOut").onclick = async () => { await sb.auth.signOut(); location.replace("login.html"); };
 
