@@ -21,7 +21,10 @@ const YSTOPS=[-1,'#E6E8E4',0,'#FCEFD9',4,'#F6D08C',6,'#E8A33D',8,'#C46A12',10,'#
 const DSTOPS=[0,'#F3F4F1',1,'#FBD3D0',10,'#F08A80',40,'#D2433A',120,'#8E1B14'];
 const HSTOPS=[0,'#EDEBF5',20,'#CFC8E8',60,'#A090D2',150,'#6E54B5',350,'#3E2A86'];
 const ESRI='https://server.arcgisonline.com/ArcGIS/rest/services/';
+const _pmp=new pmtiles.Protocol();maplibregl.addProtocol('pmtiles',_pmp.tile);
+const BLD_URL='pmtiles://'+new URL('buildings.pmtiles',location.href).href;
 const style={version:8,sources:{c:{type:'geojson',data:DATA},
+ bld:{type:'vector',url:BLD_URL,attribution:'Buildings © Microsoft (ODbL)'},
  street:{type:'raster',tiles:[ESRI+'World_Street_Map/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19,attribution:'Basemap © Esri, HERE, Garmin, OpenStreetMap contributors'},
  sat:{type:'raster',tiles:[ESRI+'World_Imagery/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19,attribution:'Imagery © Esri, Maxar, Earthstar Geographics'},
  labels:{type:'raster',tiles:[ESRI+'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19}},
@@ -32,6 +35,8 @@ const style={version:8,sources:{c:{type:'geojson',data:DATA},
  {id:'fill',type:'fill',source:'c',paint:{'fill-color':['get','useColor'],'fill-opacity':0.28}},
  {id:'ext',type:'fill-extrusion',source:'c',layout:{visibility:'none'},paint:{'fill-extrusion-color':['interpolate',['linear'],['get','max_h'],...HSTOPS],'fill-extrusion-height':['get','ext'],'fill-extrusion-opacity':0.92}},
  {id:'line',type:'line',source:'c',paint:{'line-color':['get','useColor'],'line-width':1.4,'line-opacity':0.95}},
+ {id:'bld-fill',type:'fill',source:'bld','source-layer':'buildings',minzoom:14,paint:{'fill-color':'#8A93A3','fill-opacity':['interpolate',['linear'],['zoom'],14,0.35,17,0.6]}},
+ {id:'bld-line',type:'line',source:'bld','source-layer':'buildings',minzoom:15,paint:{'line-color':'#4B5563','line-width':0.6,'line-opacity':0.7}},
  {id:'sel',type:'line',source:'c',filter:['==',['id'],-1],paint:{'line-color':'#0F6E73','line-width':3}},
  {id:'labels',type:'raster',source:'labels',layout:{visibility:'none'}}
 ]};
@@ -224,3 +229,8 @@ window.showFavorites = function () {
   D.onclick = e => { const o = e.target.closest('.opp[data-i]'); if (o && D.contains(o) && /المفضلة/.test(D.textContent.slice(0, 20))) plotCard(+o.dataset.i); };
   document.getElementById('side').scrollTo({ top: D.offsetTop - 10, behavior: 'smooth' });
 };
+
+// hint: buildings appear only when zoomed in
+(()=>{const h=document.createElement('div');h.id='bldHint';h.textContent='🔍 قرّب على الخريطة عشان تشوف شكل كل مبنى';
+h.style.cssText='position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:7;background:rgba(255,255,255,.95);border:1px solid #D5DAD3;border-radius:999px;padding:7px 14px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.08);pointer-events:none';
+document.body.appendChild(h);const upd=()=>{h.style.display=map.getZoom()<14?'block':'none';};map.on('zoomend',upd);upd();})();
